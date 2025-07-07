@@ -87,7 +87,7 @@ Bob --> Alice: Hi!
 ```
 
 ## Images
-
+```
 ![Alt text](image.png)
 ```
 
