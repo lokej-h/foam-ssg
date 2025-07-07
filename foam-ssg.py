@@ -114,6 +114,10 @@ class FoamSSG:
             if '|' in link:
                 link = link.split('|', 1)[0].strip()
             
+            # Handle title#heading syntax - extract just the title part for graph links
+            if '#' in link:
+                link = link.split('#', 1)[0].strip()
+            
             # Normalize link (remove .md extension if present)
             if link.endswith('.md'):
                 link = link[:-3]
@@ -140,6 +144,7 @@ class FoamSSG:
             full_match = match.group(0)
             link = match.group(1).strip()
             alias = None
+            anchor = None
             
             # Handle pipe syntax for aliases
             if '|' in link:
@@ -147,8 +152,14 @@ class FoamSSG:
                 link = parts[0].strip()
                 alias = parts[1].strip()
             
+            # Handle title#heading syntax
+            if '#' in link:
+                link_parts = link.split('#', 1)
+                link = link_parts[0].strip()
+                anchor = link_parts[1].strip()
+            
             if not alias:
-                alias = link
+                alias = full_match[2:-2]  # Use original text as alias
             
             # Normalize link
             if link.endswith('.md'):
@@ -158,6 +169,13 @@ class FoamSSG:
             if link in self.notes:
                 # Calculate relative path from current note to target
                 relative_path = self.get_relative_path(current_note_id, link)
+                # Add anchor if present
+                if anchor:
+                    # Convert heading to URL-friendly anchor
+                    anchor_id = anchor.lower().replace(' ', '-').replace('/', '').replace('\\', '')
+                    # Remove non-alphanumeric characters except hyphens and underscores
+                    anchor_id = re.sub(r'[^a-zA-Z0-9\-_]', '', anchor_id)
+                    relative_path += f'#{anchor_id}'
                 return f'<a href="{relative_path}" class="wiki-link">{alias}</a>'
             else:
                 return f'<span class="wiki-link broken" title="Note not found: {link}">{alias}</span>'
