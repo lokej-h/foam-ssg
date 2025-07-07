@@ -1,5 +1,7 @@
 # Foam Static Site Generator
 
+A Python-based static site generator inspired by Foam bubble notes, featuring full graph visualization, full-text search, bidirectional links, and diagram support.
+
 ---
 ## Introductory Ramble
 **This was a test for myself to see if I could use Claude.ai for a practical purpose.** In my case, I was not very satisfied with the many templates out in the wild for exporting my markdown. Essentially I wanted github1s.com on my foam notes without the editor.
@@ -19,8 +21,6 @@ To me, this is fine. If I can give some of my more tedious work away while still
 Perhaps if I see the code an absolute mess I have have further misgivings. Code was meant to be read. If I can't read it, then I will forever be bound as a patron.
 
 ---
-
-A Python-based static site generator inspired by Foam bubble notes, featuring full graph visualization, full-text search, bidirectional links, and diagram support.
 
 ## Features
 
