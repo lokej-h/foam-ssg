@@ -773,7 +773,6 @@ class FoamSSG:
                 </div>
             {% else %}
                 <div class="note-content">
-                    <h1>{{ note.title }}</h1>
                     {{ note.html|safe }}
                 </div>
             {% endif %}
