@@ -282,13 +282,19 @@ class FoamSSG:
             # Get graph data with relative URLs for this specific page
             graph_data = self.get_graph_data_for_page(note_id)
             
+            # Generate relative URLs for all notes from this page
+            link_urls = {}
+            for other_note_id in self.notes:
+                link_urls[other_note_id] = self.get_relative_path(note_id, other_note_id)
+            
             # Render template with graph data specific to current page
             html = template.render(
                 note=note,
                 all_notes=self.notes,
                 graph_data=json.dumps(graph_data),
                 current_note_id=note_id,
-                search_data=json.dumps(self.get_search_data()),
+                search_data=json.dumps(self.get_search_data_for_page(note_id)),
+                link_urls=link_urls,
                 is_index=False
             )
             
@@ -357,6 +363,19 @@ class FoamSSG:
                 'title': note['title'],
                 'content': note['content'][:500],  # First 500 chars for preview
                 'url': note['url']
+            })
+        return search_data
+    
+    def get_search_data_for_page(self, current_note_id):
+        """Prepare search index data with relative URLs for a specific page"""
+        search_data = []
+        for note_id, note in self.notes.items():
+            relative_url = self.get_relative_path(current_note_id, note_id)
+            search_data.append({
+                'id': note_id,
+                'title': note['title'],
+                'content': note['content'][:500],  # First 500 chars for preview
+                'url': relative_url
             })
         return search_data
     
@@ -634,7 +653,7 @@ class FoamSSG:
                             {% for link in note.links %}
                                 {% if link in all_notes %}
                                 <li class="link-item">
-                                    <a href="{{ all_notes[link].url }}">{{ all_notes[link].title }}</a>
+                                    <a href="{{ link_urls[link] }}">{{ all_notes[link].title }}</a>
                                 </li>
                                 {% endif %}
                             {% endfor %}
@@ -647,7 +666,7 @@ class FoamSSG:
                             {% for backlink in note.backlinks %}
                                 {% if backlink in all_notes %}
                                 <li class="link-item">
-                                    <a href="{{ all_notes[backlink].url }}">{{ all_notes[backlink].title }}</a>
+                                    <a href="{{ link_urls[backlink] }}">{{ all_notes[backlink].title }}</a>
                                 </li>
                                 {% endif %}
                             {% endfor %}
