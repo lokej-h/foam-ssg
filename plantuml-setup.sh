@@ -12,6 +12,41 @@ if ! command -v java &> /dev/null; then
     exit 1
 fi
 
+# Check if Graphviz (dot) is installed
+if ! command -v dot &> /dev/null; then
+    echo "Installing Graphviz (required for PlantUML diagrams)..."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        if command -v brew &> /dev/null; then
+            brew install graphviz
+        else
+            echo "Error: Homebrew not found. Please install Graphviz manually:"
+            echo "  brew install graphviz"
+            exit 1
+        fi
+    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        # Linux
+        if command -v apt &> /dev/null; then
+            sudo apt update && sudo apt install -y graphviz
+        elif command -v yum &> /dev/null; then
+            sudo yum install -y graphviz
+        elif command -v pacman &> /dev/null; then
+            sudo pacman -S graphviz
+        else
+            echo "Error: Package manager not found. Please install Graphviz manually:"
+            echo "  Ubuntu/Debian: sudo apt install graphviz"
+            echo "  RHEL/CentOS: sudo yum install graphviz"
+            echo "  Arch: sudo pacman -S graphviz"
+            exit 1
+        fi
+    else
+        echo "Error: Unsupported OS. Please install Graphviz manually."
+        exit 1
+    fi
+else
+    echo "Graphviz already installed ✓"
+fi
+
 # Create tools directory
 mkdir -p ~/foam-ssg-tools
 cd ~/foam-ssg-tools
