@@ -252,16 +252,107 @@ class FoamSSG:
         diagrams_dir = self.output_dir / 'diagrams'
         diagrams_dir.mkdir(parents=True, exist_ok=True)
         
-        # Generate unique filename
-        diagram_hash = hashlib.md5(diagram_code.encode()).hexdigest()
+        # Generate unique filename including theme version to force regeneration
+        theme_version = "dark_v5"  # Increment when theme changes
+        combined_content = f"{diagram_code}_{theme_version}"
+        diagram_hash = hashlib.md5(combined_content.encode()).hexdigest()
         img_filename = f'plantuml_{note_id}_{diagram_hash}.png'
         img_path = diagrams_dir / img_filename
         
         # Try to render with PlantUML if available
         try:
-            # Write PlantUML code to temp file
+            # Write PlantUML code to temp file with dark theme
+            # Add comprehensive dark theme directives to match CSS styles
+            dark_theme_code = f'''@startuml
+skinparam backgroundColor #1e1e1e
+skinparam defaultTextColor #d4d4d4
+skinparam shadowing false
+
+' Class diagrams
+skinparam classBackgroundColor #252526
+skinparam classBorderColor #3e3e42
+skinparam classArrowColor #d4d4d4
+skinparam classHeaderBackgroundColor #2d2d30
+skinparam classAttributeIconSize 0
+skinparam classAttributeFontColor #d4d4d4
+skinparam classStereotypeFontColor #cccccc
+
+' Sequence diagrams
+skinparam sequenceParticipantBackgroundColor #252526
+skinparam sequenceParticipantBorderColor #3e3e42
+skinparam sequenceLifeLineBackgroundColor #1e1e1e
+skinparam sequenceLifeLineBorderColor #3e3e42
+skinparam sequenceArrowColor #d4d4d4
+skinparam sequenceGroupBackgroundColor #2d2d30
+skinparam sequenceGroupBorderColor #3e3e42
+skinparam sequenceBoxBackgroundColor #252526
+skinparam sequenceBoxBorderColor #3e3e42
+
+' Activity diagrams
+skinparam activityBackgroundColor #252526
+skinparam activityBorderColor #3e3e42
+skinparam activityArrowColor #d4d4d4
+skinparam activityStartColor #007acc
+skinparam activityEndColor #f48771
+skinparam activityBarColor #3e3e42
+skinparam activityDiamondBackgroundColor #2d2d30
+skinparam activityDiamondBorderColor #3e3e42
+
+' Use case diagrams
+skinparam usecaseBackgroundColor #252526
+skinparam usecaseBorderColor #3e3e42
+skinparam actorBackgroundColor #252526
+skinparam actorBorderColor #3e3e42
+
+' State diagrams
+skinparam stateBackgroundColor #252526
+skinparam stateBorderColor #3e3e42
+skinparam stateArrowColor #d4d4d4
+skinparam stateStartColor #007acc
+skinparam stateEndColor #f48771
+
+' Component diagrams
+skinparam componentBackgroundColor #252526
+skinparam componentBorderColor #3e3e42
+skinparam componentArrowColor #d4d4d4
+skinparam interfaceBackgroundColor #2d2d30
+skinparam interfaceBorderColor #3e3e42
+
+' Package diagrams
+skinparam packageBackgroundColor #252526
+skinparam packageBorderColor #3e3e42
+
+' Notes and text
+skinparam noteBackgroundColor #3c3c3c
+skinparam noteBorderColor #3e3e42
+skinparam noteFontColor #d4d4d4
+skinparam titleFontColor #cccccc
+skinparam footerFontColor #cccccc
+skinparam headerFontColor #cccccc
+
+' Objects
+skinparam objectBackgroundColor #252526
+skinparam objectBorderColor #3e3e42
+skinparam objectArrowColor #d4d4d4
+
+' Rectangles and other shapes
+skinparam rectangleBackgroundColor #252526
+skinparam rectangleBorderColor #3e3e42
+skinparam circleBackgroundColor #252526
+skinparam circleBorderColor #3e3e42
+
+' Stereotypes
+skinparam stereotypeCBackgroundColor #2d2d30
+skinparam stereotypeABackgroundColor #2d2d30
+skinparam stereotypeIBackgroundColor #2d2d30
+skinparam stereotypeEBackgroundColor #2d2d30
+
+{diagram_code}
+@enduml'''
+            
             with tempfile.NamedTemporaryFile(mode='w', suffix='.puml', delete=False) as temp_file:
-                temp_file.write(f'@startuml\n{diagram_code}\n@enduml')
+                temp_file.write(dark_theme_code)
+                temp_file.flush()  # Ensure content is written
                 temp_filename = temp_file.name
             
             # Run PlantUML (try different common commands)
@@ -865,12 +956,12 @@ class FoamSSG:
         svg.call(zoom);
         
         const simulation = d3.forceSimulation(graphData.nodes)
-            .force("link", d3.forceLink(graphData.edges).id(d => d.id).distance(40))
-            .force("charge", d3.forceManyBody().strength(-80))
+            .force("link", d3.forceLink(graphData.edges).id(d => d.id).distance(50))
+            .force("charge", d3.forceManyBody().strength(-150))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collision", d3.forceCollide().radius(20))
-            .force("x", d3.forceX(width / 2).strength(0.05))
-            .force("y", d3.forceY(height / 2).strength(0.05));
+            .force("collision", d3.forceCollide().radius(25))
+            .force("x", d3.forceX(width / 2).strength(0.02))
+            .force("y", d3.forceY(height / 2).strength(0.02));
         
         const link = g.append("g")
             .selectAll("line")
@@ -931,8 +1022,8 @@ class FoamSSG:
                 .attr("y2", d => d.target.y);
             
             node
-                .attr("cx", d => Math.max(5, Math.min(width - 5, d.x)))
-                .attr("cy", d => Math.max(5, Math.min(height - 5, d.y)));
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
         });
         
         // Zoom controls
