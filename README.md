@@ -1,5 +1,25 @@
 # Foam Static Site Generator
 
+---
+## Introductory Ramble
+**This was a test for myself to see if I could use Claude.ai for a practical purpose.** In my case, I was not very satisfied with the many templates out in the wild for exporting my markdown. Essentially I wanted github1s.com on my foam notes without the editor.
+
+I thought this would at least be an interesting project and I could fix any issues that Claude would fail at, so I asked for a Python implementation rather than Ruby.
+
+Surprisingly, Claude has written the vast majority of the code and I have confirmed it at least worked with a very simple test setup. As of this time, I haven't vetted the codebase thouroughly, but at the same time it doesn't matter too much to me on how it works as long as it works.
+
+It's a little frustrating that I got into engineering to be able to create my own tools to make my life better and here I am handing it off to another tool to make it for me.
+
+But also, even though I did end up cleaning the house and doing other tasks while Claude whittled away at the code to fulfill my request, it was much more effective for me to sit and watch exactly what Claude was doing and immediately abort it if I (the human) saw a much easier solution or saw it pursuing a bad inference of how a failure mode occurred. I still needed at least a small part of my engineering expereience to be an effective patron.
+
+It really felt more like sitting by someone who is much faster and more adept at typing and handling the computer than I am, but that someone didn't really get all the nuances of how everything worked.
+
+To me, this is fine. If I can give some of my more tedious work away while still having enough control to get things done, that's great. On the other hand, I can't call all of the code "mine", but I can call all of the idea "mine". I was the picky patron.
+
+Perhaps if I see the code an absolute mess I have have further misgivings. Code was meant to be read. If I can't read it, then I will forever be bound as a patron.
+
+---
+
 A Python-based static site generator inspired by Foam bubble notes, featuring full graph visualization, full-text search, bidirectional links, and diagram support.
 
 ## Features
