@@ -199,6 +199,34 @@ class FoamSSG:
             # Fallback to absolute-style path
             return f"{to_note_id}.html"
     
+    def get_relative_diagram_path(self, from_note_id, img_filename):
+        """Calculate relative path from a note to a diagram image"""
+        from pathlib import Path
+        
+        # Convert note ID to path
+        from_path = Path(from_note_id + '.html')
+        
+        # Calculate relative path from note to diagrams directory
+        try:
+            # Calculate the path from the note's location to the root diagrams directory
+            # For projects/foam-ssg.html -> ../diagrams/...
+            # For index.html -> diagrams/...
+            from_dir = from_path.parent
+            
+            # Build the relative path by going up the necessary levels
+            if from_dir == Path('.'):
+                # Note is in root directory
+                return f"diagrams/{img_filename}"
+            else:
+                # Note is in a subdirectory, need to go up to root
+                levels_up = len(from_dir.parts)
+                up_path = '../' * levels_up
+                return f"{up_path}diagrams/{img_filename}"
+        
+        except Exception:
+            # Fallback to absolute-style path
+            return f"diagrams/{img_filename}"
+    
     def process_diagrams(self, content, note_id):
         """Process Mermaid and PlantUML diagrams"""
         # Process Mermaid
@@ -263,7 +291,9 @@ class FoamSSG:
                 generated_img.rename(img_path)
                 # Clean up temp file
                 Path(temp_filename).unlink(missing_ok=True)
-                return f'<img src="diagrams/{img_filename}" alt="PlantUML diagram" class="plantuml-diagram">'
+                # Calculate relative path to diagrams directory from current note
+                relative_img_path = self.get_relative_diagram_path(note_id, img_filename)
+                return f'<img src="{relative_img_path}" alt="PlantUML diagram" class="plantuml-diagram">'
                 
             # Clean up temp file
             Path(temp_filename).unlink(missing_ok=True)
@@ -622,7 +652,7 @@ class FoamSSG:
         
         /* Diagrams */
         .mermaid { margin: 20px 0; text-align: center; }
-        .plantuml-diagram { max-width: 100%; margin: 20px 0; }
+        .plantuml-diagram { max-width: 100%; margin: 20px auto; display: block; }
         
         /* Mobile Toggle Button */
         .sidebar-toggle { 
