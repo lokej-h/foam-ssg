@@ -294,6 +294,7 @@ class FoamSSG:
                 graph_data=json.dumps(graph_data),
                 current_note_id=note_id,
                 search_data=json.dumps(self.get_search_data_for_page(note_id)),
+                file_tree_data=json.dumps(self.get_file_tree_data(note_id)),
                 link_urls=link_urls,
                 is_index=False
             )
@@ -379,6 +380,41 @@ class FoamSSG:
             })
         return search_data
     
+    def generate_file_tree(self, current_note_id=None):
+        """Generate hierarchical file tree structure"""
+        tree = {}
+        
+        # Build tree structure from file paths
+        for note_id, note in self.notes.items():
+            path_parts = Path(note['path']).parts
+            current_level = tree
+            
+            # Navigate/create the tree structure
+            for i, part in enumerate(path_parts):
+                if i == len(path_parts) - 1:
+                    # This is the file
+                    if part not in current_level:
+                        current_level[part] = {
+                            'type': 'file',
+                            'note_id': note_id,
+                            'title': note['title'],
+                            'url': self.get_relative_path(current_note_id, note_id) if current_note_id else note['url']
+                        }
+                else:
+                    # This is a directory
+                    if part not in current_level:
+                        current_level[part] = {
+                            'type': 'directory',
+                            'children': {}
+                        }
+                    current_level = current_level[part]['children']
+        
+        return tree
+    
+    def get_file_tree_data(self, current_note_id=None):
+        """Get file tree data for template rendering"""
+        return self.generate_file_tree(current_note_id)
+    
     def generate_search_index(self):
         """Generate search index file"""
         search_index = {
@@ -398,7 +434,8 @@ class FoamSSG:
             notes=self.notes,
             graph_data=json.dumps(graph_data),
             current_note_id=None,
-            search_data=json.dumps(self.get_search_data())
+            search_data=json.dumps(self.get_search_data()),
+            file_tree_data=json.dumps(self.get_file_tree_data())
         )
         
         (self.output_dir / 'index.html').write_text(html)
@@ -522,6 +559,45 @@ class FoamSSG:
         .link-item a { color: #3794ff; text-decoration: none; }
         .link-item a:hover { text-decoration: underline; }
         
+        /* File Tree */
+        .file-tree { font-family: 'Courier New', monospace; font-size: 13px; }
+        .file-tree-item { 
+            padding: 2px 0; 
+            cursor: pointer; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis;
+        }
+        .file-tree-item:hover { background: #2a2d2e; }
+        .file-tree-folder { 
+            color: #cccccc; 
+            font-weight: bold; 
+            padding: 4px 0; 
+            cursor: pointer;
+        }
+        .file-tree-folder:hover { background: #2a2d2e; }
+        .file-tree-folder .folder-icon { 
+            display: inline-block; 
+            width: 16px; 
+            margin-right: 4px;
+            transition: transform 0.2s ease;
+        }
+        .file-tree-folder.expanded .folder-icon { transform: rotate(90deg); }
+        .file-tree-file { 
+            color: #d4d4d4; 
+            padding-left: 20px; 
+            text-decoration: none; 
+            display: block;
+        }
+        .file-tree-file:hover { color: #3794ff; }
+        .file-tree-children { 
+            margin-left: 16px; 
+            border-left: 1px solid #3e3e42; 
+            padding-left: 8px; 
+            display: none;
+        }
+        .file-tree-children.expanded { display: block; }
+        
         /* Main content */
         .main-content { flex: 1; overflow-y: auto; padding: 40px; }
         .note-content { max-width: 800px; margin: 0 auto; }
@@ -629,6 +705,7 @@ class FoamSSG:
             <div class="sidebar-tabs">
                 <div class="sidebar-tab active" onclick="showTab('graph')">Graph</div>
                 <div class="sidebar-tab" onclick="showTab('search')">Search</div>
+                <div class="sidebar-tab" onclick="showTab('files')">Files</div>
                 <div class="sidebar-tab" onclick="showTab('links')">Links</div>
             </div>
             
@@ -643,6 +720,10 @@ class FoamSSG:
                 <div id="search-tab" class="tab-content" style="display: none;">
                     <input type="text" class="search-box" placeholder="Search notes..." id="search-input">
                     <ul class="search-results" id="search-results"></ul>
+                </div>
+                
+                <div id="files-tab" class="tab-content" style="display: none;">
+                    <div id="file-tree" class="file-tree"></div>
                 </div>
                 
                 <div id="links-tab" class="tab-content" style="display: none;">
@@ -898,6 +979,55 @@ class FoamSSG:
                 </li>
             `).join('');
         });
+        
+        // File tree functionality
+        const fileTreeData = {{ file_tree_data|safe }};
+        const fileTreeContainer = document.getElementById('file-tree');
+        
+        function renderFileTree(tree, container, level = 0) {
+            for (const [name, item] of Object.entries(tree)) {
+                const element = document.createElement('div');
+                element.className = 'file-tree-item';
+                
+                if (item.type === 'directory') {
+                    element.className += ' file-tree-folder';
+                    element.innerHTML = `
+                        <span class="folder-icon">▶</span>
+                        <span class="folder-name">${name}</span>
+                    `;
+                    
+                    const childrenContainer = document.createElement('div');
+                    childrenContainer.className = 'file-tree-children';
+                    
+                    // Add click handler for folder toggle
+                    element.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        element.classList.toggle('expanded');
+                        childrenContainer.classList.toggle('expanded');
+                    });
+                    
+                    // Render children
+                    if (item.children && Object.keys(item.children).length > 0) {
+                        renderFileTree(item.children, childrenContainer, level + 1);
+                    }
+                    
+                    container.appendChild(element);
+                    container.appendChild(childrenContainer);
+                } else if (item.type === 'file') {
+                    element.innerHTML = `
+                        <a href="${item.url}" class="file-tree-file" title="${item.title}">
+                            📄 ${item.title}
+                        </a>
+                    `;
+                    container.appendChild(element);
+                }
+            }
+        }
+        
+        // Initialize file tree
+        if (fileTreeContainer && fileTreeData) {
+            renderFileTree(fileTreeData, fileTreeContainer);
+        }
         
         // Mobile sidebar toggle functionality
         function toggleSidebar() {
