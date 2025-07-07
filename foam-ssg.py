@@ -60,6 +60,7 @@ class FoamSSG:
         
     def process_notes(self):
         """Process all markdown files and build graph"""
+        # First pass: Load all notes without processing wiki links
         for md_file in self.input_dir.rglob("*.md"):
             relative_path = md_file.relative_to(self.input_dir)
             note_id = str(relative_path.with_suffix(''))
@@ -68,19 +69,16 @@ class FoamSSG:
             with open(md_file, 'r', encoding='utf-8') as f:
                 post = frontmatter.load(f)
             
-            # Process content
+            # Extract links but don't process wiki links yet
             content = post.content
-            html_content = self.process_markdown(content, note_id)
-            
-            # Extract links
             links = self.extract_links(content)
             
-            # Store note data
+            # Store note data with raw content
             self.notes[note_id] = {
                 'id': note_id,
                 'title': post.get('title', md_file.stem),
                 'content': content,
-                'html': html_content,
+                'html': '',  # Will be populated in second pass
                 'metadata': post.metadata,
                 'links': links,
                 'backlinks': [],
@@ -93,6 +91,11 @@ class FoamSSG:
             for link in links:
                 self.graph.add_edge(note_id, link)
                 self.backlinks[link].append(note_id)
+        
+        # Second pass: Process wiki links and generate HTML now that all notes are loaded
+        for note_id, note in self.notes.items():
+            html_content = self.process_markdown(note['content'], note_id)
+            note['html'] = html_content
         
         # Update backlinks
         for note_id, note in self.notes.items():
@@ -165,21 +168,36 @@ class FoamSSG:
     
     def get_relative_path(self, from_note_id, to_note_id):
         """Calculate relative path from one note to another"""
-        # Split paths into components
-        from_parts = from_note_id.split('/')
-        to_parts = to_note_id.split('/')
+        from pathlib import Path
         
-        # Count directory levels to go up from source
-        from_depth = len(from_parts) - 1  # Subtract 1 for the filename
+        # Convert note IDs to paths
+        from_path = Path(from_note_id + '.html')
+        to_path = Path(to_note_id + '.html')
         
-        # Build relative path
-        if from_depth == 0:
-            # Source is in root, target path as-is
+        # Calculate relative path
+        try:
+            # Get the relative path from from_path to to_path
+            relative_path = Path('..') / to_path if from_path.parent != Path('.') else to_path
+            
+            # Handle different directory levels
+            from_parts = from_path.parts[:-1]  # Exclude filename
+            to_parts = to_path.parts[:-1]      # Exclude filename
+            
+            # Count how many levels to go up
+            up_levels = len(from_parts)
+            
+            # Build the relative path
+            if up_levels == 0:
+                # Both in root
+                return str(to_path)
+            else:
+                # Need to go up and then down
+                up_dirs = '../' * up_levels
+                return f"{up_dirs}{to_note_id}.html"
+                
+        except Exception:
+            # Fallback to absolute-style path
             return f"{to_note_id}.html"
-        else:
-            # Need to go up directories
-            up_dirs = "../" * from_depth
-            return f"{up_dirs}{to_note_id}.html"
     
     def process_diagrams(self, content, note_id):
         """Process Mermaid and PlantUML diagrams"""
@@ -256,19 +274,19 @@ class FoamSSG:
         # Create template
         template = self.create_template()
         
-        # Get full graph data (same for all pages)
-        full_graph_data = self.get_full_graph_data()
-        
         # Generate individual note pages
         for note_id, note in self.notes.items():
             output_path = self.output_dir / f"{note_id}.html"
             output_path.parent.mkdir(parents=True, exist_ok=True)
             
-            # Render template with full graph but current note highlighted
+            # Get graph data with relative URLs for this specific page
+            graph_data = self.get_graph_data_for_page(note_id)
+            
+            # Render template with graph data specific to current page
             html = template.render(
                 note=note,
                 all_notes=self.notes,
-                graph_data=json.dumps(full_graph_data),
+                graph_data=json.dumps(graph_data),
                 current_note_id=note_id,
                 search_data=json.dumps(self.get_search_data()),
                 is_index=False
@@ -279,12 +297,38 @@ class FoamSSG:
         # Generate index page
         self.generate_index_page(template)
     
-    def get_full_graph_data(self):
-        """Get complete graph data with all nodes"""
+    def get_graph_data_for_page(self, current_note_id):
+        """Get graph data with relative URLs for a specific page"""
         nodes = []
         edges = []
         
-        # Add all nodes
+        # Add all nodes with relative URLs from current page
+        for note_id, note in self.notes.items():
+            relative_url = self.get_relative_path(current_note_id, note_id)
+            nodes.append({
+                'id': note_id,
+                'label': note['title'],
+                'url': relative_url
+            })
+        
+        # Add all edges
+        edge_set = set()  # To avoid duplicates
+        for note_id, note in self.notes.items():
+            for link in note['links']:
+                if link in self.notes:
+                    edge_key = (note_id, link)
+                    if edge_key not in edge_set:
+                        edge_set.add(edge_key)
+                        edges.append({'source': note_id, 'target': link})
+        
+        return {'nodes': nodes, 'edges': edges}
+    
+    def get_full_graph_data(self):
+        """Get complete graph data with all nodes (for index page)"""
+        nodes = []
+        edges = []
+        
+        # Add all nodes (for index page, use direct URLs)
         for note_id, note in self.notes.items():
             nodes.append({
                 'id': note_id,

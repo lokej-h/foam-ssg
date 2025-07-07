@@ -67,11 +67,79 @@
         /* Diagrams */
         .mermaid { margin: 20px 0; text-align: center; }
         .plantuml-diagram { max-width: 100%; margin: 20px 0; }
+        
+        /* Mobile Toggle Button */
+        .sidebar-toggle { 
+            display: none; 
+            position: fixed; 
+            top: 20px; 
+            left: 20px; 
+            z-index: 1000; 
+            background: #007acc; 
+            color: white; 
+            border: none; 
+            padding: 10px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 16px;
+        }
+        
+        /* Overlay for mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 998;
+        }
+        
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            .sidebar-toggle { display: block; }
+            
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                z-index: 999;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .sidebar-overlay.active {
+                display: block;
+            }
+            
+            .main-content {
+                width: 100%;
+                padding: 80px 20px 20px 20px;
+            }
+            
+            .note-content h1 { font-size: 2em; }
+            .note-content h2 { font-size: 1.5em; }
+            .note-content h3 { font-size: 1.2em; }
+            
+            #graph { height: 300px; }
+            
+            .sidebar-content { padding: 15px; }
+        }
     </style>
 </head>
 <body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+    
     <div class="container">
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
             <div class="sidebar-tabs">
                 <div class="sidebar-tab active" onclick="showTab('graph')">Graph</div>
                 <div class="sidebar-tab" onclick="showTab('search')">Search</div>
@@ -140,7 +208,7 @@
 <li>Note templates</li>
 <li>Backlinks panel</li>
 </ul>
-<p>Inspiration for <a href="projects/foam-ssg.html" class="wiki-link">projects/foam-ssg</a>.</p>
+<p>Inspiration for <a href="../projects/foam-ssg.html" class="wiki-link">projects/foam-ssg</a>.</p>
                 </div>
             
         </div>
@@ -164,7 +232,7 @@
         }
         
         // Graph visualization
-        const graphData = {"nodes": [{"id": "index", "label": "Welcome to My Knowledge Base", "url": "index.html"}, {"id": "programming/python-tips", "label": "Python Tips & Tricks", "url": "programming/python-tips.html"}, {"id": "projects/foam-ssg", "label": "Building a Foam-Style SSG", "url": "projects/foam-ssg.html"}, {"id": "daily/2024-01-20", "label": "Daily Note - 2024-01-20", "url": "daily/2024-01-20.html"}, {"id": "ideas/knowledge-management", "label": "Thoughts on Knowledge Management", "url": "ideas/knowledge-management.html"}, {"id": "concepts/markdown", "label": "Markdown Format", "url": "concepts/markdown.html"}, {"id": "concepts/wiki-links", "label": "Wiki Links", "url": "concepts/wiki-links.html"}, {"id": "tools/foam", "label": "Foam VS Code Extension", "url": "tools/foam.html"}, {"id": "tools/obsidian", "label": "Obsidian", "url": "tools/obsidian.html"}], "edges": [{"source": "index", "target": "daily/2024-01-20"}, {"source": "index", "target": "programming/python-tips"}, {"source": "index", "target": "projects/foam-ssg"}, {"source": "index", "target": "ideas/knowledge-management"}, {"source": "projects/foam-ssg", "target": "tools/obsidian"}, {"source": "projects/foam-ssg", "target": "concepts/wiki-links"}, {"source": "projects/foam-ssg", "target": "tools/foam"}, {"source": "projects/foam-ssg", "target": "programming/python-tips"}, {"source": "projects/foam-ssg", "target": "concepts/markdown"}, {"source": "daily/2024-01-20", "target": "projects/foam-ssg"}, {"source": "daily/2024-01-20", "target": "ideas/knowledge-management"}, {"source": "ideas/knowledge-management", "target": "tools/obsidian"}, {"source": "ideas/knowledge-management", "target": "tools/foam"}, {"source": "ideas/knowledge-management", "target": "projects/foam-ssg"}, {"source": "concepts/markdown", "target": "projects/foam-ssg"}, {"source": "concepts/wiki-links", "target": "projects/foam-ssg"}, {"source": "tools/foam", "target": "projects/foam-ssg"}, {"source": "tools/obsidian", "target": "projects/foam-ssg"}]};
+        const graphData = {"nodes": [{"id": "index", "label": "Welcome to My Knowledge Base", "url": "../index.html"}, {"id": "projects/foam-ssg", "label": "Building a Foam-Style SSG", "url": "../projects/foam-ssg.html"}, {"id": "ideas/knowledge-management", "label": "Thoughts on Knowledge Management", "url": "../ideas/knowledge-management.html"}, {"id": "daily/2024-01-20", "label": "Daily Note - 2024-01-20", "url": "../daily/2024-01-20.html"}, {"id": "tools/foam", "label": "Foam VS Code Extension", "url": "../tools/foam.html"}, {"id": "tools/obsidian", "label": "Obsidian", "url": "../tools/obsidian.html"}, {"id": "programming/python-tips", "label": "Python Tips & Tricks", "url": "../programming/python-tips.html"}, {"id": "concepts/markdown", "label": "Markdown Format", "url": "../concepts/markdown.html"}, {"id": "concepts/wiki-links", "label": "Wiki Links", "url": "../concepts/wiki-links.html"}], "edges": [{"source": "index", "target": "projects/foam-ssg"}, {"source": "index", "target": "programming/python-tips"}, {"source": "index", "target": "daily/2024-01-20"}, {"source": "index", "target": "ideas/knowledge-management"}, {"source": "projects/foam-ssg", "target": "tools/obsidian"}, {"source": "projects/foam-ssg", "target": "programming/python-tips"}, {"source": "projects/foam-ssg", "target": "concepts/markdown"}, {"source": "projects/foam-ssg", "target": "concepts/wiki-links"}, {"source": "projects/foam-ssg", "target": "tools/foam"}, {"source": "ideas/knowledge-management", "target": "tools/obsidian"}, {"source": "ideas/knowledge-management", "target": "projects/foam-ssg"}, {"source": "ideas/knowledge-management", "target": "tools/foam"}, {"source": "daily/2024-01-20", "target": "projects/foam-ssg"}, {"source": "daily/2024-01-20", "target": "ideas/knowledge-management"}, {"source": "tools/foam", "target": "projects/foam-ssg"}, {"source": "tools/obsidian", "target": "projects/foam-ssg"}, {"source": "concepts/markdown", "target": "projects/foam-ssg"}, {"source": "concepts/wiki-links", "target": "projects/foam-ssg"}]};
         const currentNoteId = "tools/foam";
         const width = 280;
         const height = 380;
@@ -294,7 +362,7 @@
         }
         
         // Search functionality
-        const searchData = [{"id": "index", "title": "Welcome to My Knowledge Base", "content": "# Welcome to My Knowledge Base\n\nThis is my personal knowledge base built with Foam SSG. It contains notes on various topics I'm learning and thinking about.\n\n## Quick Links\n\n- [[programming/python-tips|Python Tips & Tricks]]\n- [[daily/2024-01-20|Today's Notes]]\n- [[projects/foam-ssg|Building This Site]]\n\n## Recent Thoughts\n\nI've been exploring how to better organize my thoughts and knowledge. This tool helps me create a web of interconnected ideas.\n\nCheck out my [[ideas/knowledge-management]] no", "url": "index.html"}, {"id": "programming/python-tips", "title": "Python Tips & Tricks", "content": "# Python Tips & Tricks\n\nCollection of useful Python patterns and snippets.\n\n## List Comprehensions\n\nPython's list comprehensions are powerful. See [[programming/functional-python]] for more functional programming patterns.\n\n```python\n# Filter and transform in one go\nsquared_evens = [x**2 for x in numbers if x % 2 == 0]\n```\n\n## Useful Libraries\n\n- **requests**: For HTTP requests\n- **pandas**: Data manipulation (see [[data-science/pandas-guide]])\n- **pytest**: Testing framework\n\nRelated: [[program", "url": "programming/python-tips.html"}, {"id": "projects/foam-ssg", "title": "Building a Foam-Style SSG", "content": "# Building a Foam-Style SSG\n\nThis project implements a static site generator inspired by [[tools/foam|Foam]] and [[tools/obsidian|Obsidian]].\n\n## Features\n\n### Graph Visualization\n\n```mermaid\ngraph TD\n    A[Markdown Files] --> B[Parser]\n    B --> C[HTML Generator]\n    B --> D[Graph Builder]\n    C --> E[Static Site]\n    D --> E\n```\n\n### Architecture\n\n```plantuml\n@startuml\nclass FoamSSG {\n    - input_dir: Path\n    - output_dir: Path\n    - notes: dict\n    - graph: DiGraph\n    + build()\n    + proces", "url": "projects/foam-ssg.html"}, {"id": "daily/2024-01-20", "title": "Daily Note - 2024-01-20", "content": "# Daily Note - 2024-01-20\n\n## Today's Tasks\n\n- [x] Set up [[projects/foam-ssg|Foam SSG]]\n- [x] Write documentation\n- [ ] Test with real notes\n- [ ] Deploy to GitHub Pages\n\n## Thoughts\n\nWorking on building a knowledge management system. The key insight is that [[ideas/knowledge-management|knowledge is a graph]], not a hierarchy.\n\n## Links\n\n- Previous: [[daily/2024-01-19]]\n- Next: [[daily/2024-01-21]]", "url": "daily/2024-01-20.html"}, {"id": "ideas/knowledge-management", "title": "Thoughts on Knowledge Management", "content": "# Thoughts on Knowledge Management\n\nKnowledge forms a web, not a tree. Traditional folder structures fail to capture the interconnected nature of ideas.\n\n## Key Principles\n\n1. **Bidirectional Links**: When A links to B, B should know about A\n2. **Emergence**: Structure emerges from connections, not imposed hierarchy\n3. **Atomic Notes**: Each note should contain one idea\n\n## Tools\n\n- [[tools/foam]]: VS Code extension\n- [[tools/obsidian]]: Desktop app\n- [[projects/foam-ssg]]: My static site genera", "url": "ideas/knowledge-management.html"}, {"id": "concepts/markdown", "title": "Markdown Format", "content": "# Markdown Format\n\nMarkdown is a lightweight markup language for creating formatted text using plain text.\n\n## Key Features\n\n- Simple syntax\n- Readable as plain text\n- Converts to HTML easily\n- Widely supported\n\nUsed extensively in [[projects/foam-ssg]] for note content.", "url": "concepts/markdown.html"}, {"id": "concepts/wiki-links", "title": "Wiki Links", "content": "# Wiki Links\n\nWiki-style links use double brackets `[[target]]` to create connections between notes.\n\n## Syntax\n\n- `[[note-name]]`: Basic link\n- `[[note-name|display-text]]`: Link with custom display text\n\nEssential for building knowledge graphs in [[projects/foam-ssg]].", "url": "concepts/wiki-links.html"}, {"id": "tools/foam", "title": "Foam VS Code Extension", "content": "# Foam VS Code Extension\n\nFoam is a personal knowledge management system built on VS Code, inspired by Roam Research.\n\n## Features\n\n- Wiki-style linking\n- Graph visualization\n- Note templates\n- Backlinks panel\n\nInspiration for [[projects/foam-ssg]].", "url": "tools/foam.html"}, {"id": "tools/obsidian", "title": "Obsidian", "content": "# Obsidian\n\nObsidian is a powerful knowledge base that works on local Markdown files.\n\n## Key Features\n\n- Local file storage\n- Graph view\n- Plugin ecosystem\n- Vault system\n\nAnother inspiration for [[projects/foam-ssg]].", "url": "tools/obsidian.html"}];
+        const searchData = [{"id": "index", "title": "Welcome to My Knowledge Base", "content": "# Welcome to My Knowledge Base\n\nThis is my personal knowledge base built with Foam SSG. It contains notes on various topics I'm learning and thinking about.\n\n## Quick Links\n\n- [[programming/python-tips|Python Tips & Tricks]]\n- [[daily/2024-01-20|Today's Notes]]\n- [[projects/foam-ssg|Building This Site]]\n\n## Recent Thoughts\n\nI've been exploring how to better organize my thoughts and knowledge. This tool helps me create a web of interconnected ideas.\n\nCheck out my [[ideas/knowledge-management]] no", "url": "index.html"}, {"id": "projects/foam-ssg", "title": "Building a Foam-Style SSG", "content": "# Building a Foam-Style SSG\n\nThis project implements a static site generator inspired by [[tools/foam|Foam]] and [[tools/obsidian|Obsidian]].\n\n## Features\n\n### Graph Visualization\n\n```mermaid\ngraph TD\n    A[Markdown Files] --> B[Parser]\n    B --> C[HTML Generator]\n    B --> D[Graph Builder]\n    C --> E[Static Site]\n    D --> E\n```\n\n### Architecture\n\n```plantuml\n@startuml\nclass FoamSSG {\n    - input_dir: Path\n    - output_dir: Path\n    - notes: dict\n    - graph: DiGraph\n    + build()\n    + proces", "url": "projects/foam-ssg.html"}, {"id": "ideas/knowledge-management", "title": "Thoughts on Knowledge Management", "content": "# Thoughts on Knowledge Management\n\nKnowledge forms a web, not a tree. Traditional folder structures fail to capture the interconnected nature of ideas.\n\n## Key Principles\n\n1. **Bidirectional Links**: When A links to B, B should know about A\n2. **Emergence**: Structure emerges from connections, not imposed hierarchy\n3. **Atomic Notes**: Each note should contain one idea\n\n## Tools\n\n- [[tools/foam]]: VS Code extension\n- [[tools/obsidian]]: Desktop app\n- [[projects/foam-ssg]]: My static site genera", "url": "ideas/knowledge-management.html"}, {"id": "daily/2024-01-20", "title": "Daily Note - 2024-01-20", "content": "# Daily Note - 2024-01-20\n\n## Today's Tasks\n\n- [x] Set up [[projects/foam-ssg|Foam SSG]]\n- [x] Write documentation\n- [ ] Test with real notes\n- [ ] Deploy to GitHub Pages\n\n## Thoughts\n\nWorking on building a knowledge management system. The key insight is that [[ideas/knowledge-management|knowledge is a graph]], not a hierarchy.\n\n## Links\n\n- Previous: [[daily/2024-01-19]]\n- Next: [[daily/2024-01-21]]", "url": "daily/2024-01-20.html"}, {"id": "tools/foam", "title": "Foam VS Code Extension", "content": "# Foam VS Code Extension\n\nFoam is a personal knowledge management system built on VS Code, inspired by Roam Research.\n\n## Features\n\n- Wiki-style linking\n- Graph visualization\n- Note templates\n- Backlinks panel\n\nInspiration for [[projects/foam-ssg]].", "url": "tools/foam.html"}, {"id": "tools/obsidian", "title": "Obsidian", "content": "# Obsidian\n\nObsidian is a powerful knowledge base that works on local Markdown files.\n\n## Key Features\n\n- Local file storage\n- Graph view\n- Plugin ecosystem\n- Vault system\n\nAnother inspiration for [[projects/foam-ssg]].", "url": "tools/obsidian.html"}, {"id": "programming/python-tips", "title": "Python Tips & Tricks", "content": "# Python Tips & Tricks\n\nCollection of useful Python patterns and snippets.\n\n## List Comprehensions\n\nPython's list comprehensions are powerful. See [[programming/functional-python]] for more functional programming patterns.\n\n```python\n# Filter and transform in one go\nsquared_evens = [x**2 for x in numbers if x % 2 == 0]\n```\n\n## Useful Libraries\n\n- **requests**: For HTTP requests\n- **pandas**: Data manipulation (see [[data-science/pandas-guide]])\n- **pytest**: Testing framework\n\nRelated: [[program", "url": "programming/python-tips.html"}, {"id": "concepts/markdown", "title": "Markdown Format", "content": "# Markdown Format\n\nMarkdown is a lightweight markup language for creating formatted text using plain text.\n\n## Key Features\n\n- Simple syntax\n- Readable as plain text\n- Converts to HTML easily\n- Widely supported\n\nUsed extensively in [[projects/foam-ssg]] for note content.", "url": "concepts/markdown.html"}, {"id": "concepts/wiki-links", "title": "Wiki Links", "content": "# Wiki Links\n\nWiki-style links use double brackets `[[target]]` to create connections between notes.\n\n## Syntax\n\n- `[[note-name]]`: Basic link\n- `[[note-name|display-text]]`: Link with custom display text\n\nEssential for building knowledge graphs in [[projects/foam-ssg]].", "url": "concepts/wiki-links.html"}];
         const searchInput = document.getElementById('search-input');
         const searchResults = document.getElementById('search-results');
         
@@ -316,6 +384,32 @@
                     <small>${note.content.substring(0, 100)}...</small>
                 </li>
             `).join('');
+        });
+        
+        // Mobile sidebar toggle functionality
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        }
+        
+        // Close sidebar when clicking on a link (mobile)
+        document.querySelectorAll('.sidebar a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    closeSidebar();
+                }
+            });
         });
     </script>
 </body>

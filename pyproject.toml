@@ -1,0 +1,56 @@
+[project]
+name = "foam-ssg"
+version = "0.1.0"
+description = "A Python-based static site generator inspired by Foam, with graph visualization and bidirectional linking"
+authors = [
+    {name = "Foam SSG", email = "foam-ssg@example.com"}
+]
+readme = "foam-ssg-readme.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "markdown>=3.5.0",
+    "python-frontmatter>=1.0.0",
+    "jinja2>=3.1.0",
+    "networkx>=3.0",
+    "beautifulsoup4>=4.12.0",
+    "pygments>=2.16.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "flake8>=7.2.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+foam-ssg = "foam_ssg:main"
+
+[project.urls]
+Homepage = "https://github.com/example/foam-ssg"
+Repository = "https://github.com/example/foam-ssg"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
