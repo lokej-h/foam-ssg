@@ -27,7 +27,22 @@ pip install -r requirements.txt
 ```bash
 chmod +x plantuml-setup.sh
 ./plantuml-setup.sh
+# After setup, ensure PlantUML is in PATH:
+export PATH="$HOME/foam-ssg-tools:$PATH"
+# Or add to your shell profile: echo 'export PATH="$HOME/foam-ssg-tools:$PATH"' >> ~/.bashrc
 ```
+
+## Running Foam SSG
+
+### Activation and Execution
+- To run Foam SSG:
+  - Activate virtual environment: `source .venv/bin/activate`
+  - Set PATH for PlantUML (if installed): `export PATH="$HOME/foam-ssg-tools:$PATH"`
+  - Build site: `python foam-ssg.py /path/to/notes -o /path/to/output`
+  - Build and serve locally: `python foam-ssg.py /path/to/notes --serve`
+
+### Optional PlantUML Setup
+- Install PlantUML support by running: `./plantuml-setup.sh`
 
 ## Architecture
 
@@ -95,3 +110,8 @@ Alice -> Bob: Hello
 @enduml
 ```
 ```
+
+## Environment Notes
+
+- The environment is currently installed with uv
+- Running `source .venv/bin/activate` is necessary to activate the uv environment

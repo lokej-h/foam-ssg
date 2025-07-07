@@ -206,7 +206,7 @@ class FoamSSG:
         content = re.sub(mermaid_pattern, self.render_mermaid, content, flags=re.DOTALL)
         
         # Process PlantUML
-        plantuml_pattern = r'```plantuml\n(.*?)\n```'
+        plantuml_pattern = r'```plantuml\s*\n(.*?)\n```'
         content = re.sub(plantuml_pattern, lambda m: self.render_plantuml(m, note_id), content, flags=re.DOTALL)
         
         return content
@@ -237,28 +237,36 @@ class FoamSSG:
                 temp_filename = temp_file.name
             
             # Run PlantUML (try different common commands)
+            import os
+            env = os.environ.copy()
+            
             for cmd in ['plantuml', 'java -jar plantuml.jar']:
                 try:
                     result = subprocess.run(
-                        f'{cmd} -tpng -o "{str(diagrams_dir)}" "{temp_filename}"',
+                        f'{cmd} -tpng -o "{diagrams_dir.absolute()}" "{temp_filename}"',
                         shell=True,
                         capture_output=True,
-                        text=True
+                        text=True,
+                        env=env
                     )
                     if result.returncode == 0:
                         break
-                except:
+                except Exception as e:
                     continue
             
-            # Clean up temp file
-            Path(temp_filename).unlink(missing_ok=True)
-            
-            # Check if image was generated
+            # Check if image was generated (PlantUML generates with temp filename in output directory)
             generated_img = diagrams_dir / f'{Path(temp_filename).stem}.png'
             if generated_img.exists():
+                # Ensure the parent directory exists for the target path
+                img_path.parent.mkdir(parents=True, exist_ok=True)
                 # Rename to our desired filename
                 generated_img.rename(img_path)
+                # Clean up temp file
+                Path(temp_filename).unlink(missing_ok=True)
                 return f'<img src="diagrams/{img_filename}" alt="PlantUML diagram" class="plantuml-diagram">'
+                
+            # Clean up temp file
+            Path(temp_filename).unlink(missing_ok=True)
             
         except Exception as e:
             print(f"Warning: Could not render PlantUML diagram: {e}")
