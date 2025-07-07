@@ -401,14 +401,79 @@ class FoamSSG:
         .container { display: flex; height: 100vh; }
         
         /* Sidebar */
-        .sidebar { width: 300px; background: #252526; border-right: 1px solid #3e3e42; display: flex; flex-direction: column; }
-        .sidebar-tabs { display: flex; background: #2d2d30; }
-        .sidebar-tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
+        .sidebar { 
+            width: 300px; 
+            background: #252526; 
+            border-right: 1px solid #3e3e42; 
+            display: flex; 
+            flex-direction: column; 
+            position: relative;
+            min-width: 200px;
+            max-width: 600px;
+            transition: width 0.3s ease;
+        }
+        
+        .sidebar.resizing {
+            transition: none; /* Disable transition during manual resize */
+        }
+        
+        /* Collapse functionality removed for desktop */
+        
+        .sidebar-header {
+            display: none; /* Hidden on desktop */
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .sidebar-title {
+            font-weight: bold;
+            color: #cccccc;
+            font-size: 14px;
+        }
+        
+        .sidebar-toggle-btn {
+            background: none;
+            border: none;
+            color: #cccccc;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px;
+            border-radius: 3px;
+            transition: background-color 0.2s ease;
+        }
+        
+        .sidebar-toggle-btn:hover {
+            background-color: #3e3e42;
+        }
+        
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 4px;
+            height: 100%;
+            background: transparent;
+            cursor: col-resize;
+            transition: background-color 0.2s ease;
+        }
+        
+        .sidebar-resizer:hover {
+            background-color: #007acc;
+        }
+        
+        /* Collapse resizer styles removed for desktop */
+        .sidebar-tabs { display: flex; background: #2d2d30; transition: opacity 0.3s ease; }
+        .sidebar-tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; font-size: 12px; }
         .sidebar-tab.active { border-bottom-color: #007acc; }
-        .sidebar-content { flex: 1; overflow-y: auto; padding: 20px; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 20px; transition: opacity 0.3s ease; }
+        
+        /* Collapse styles removed for desktop */
         
         /* Graph */
-        #graph { width: 100%; height: 400px; background: #1e1e1e; position: relative; border-radius: 4px; }
+        #graph { width: 100%; height: 400px; background: #1e1e1e; position: relative; border-radius: 4px; overflow: hidden; }
         .graph-node { cursor: pointer; }
         .graph-node:hover { stroke-width: 3px !important; }
         .graph-link { stroke: #666; stroke-opacity: 0.6; }
@@ -497,11 +562,14 @@ class FoamSSG:
                 transform: translateX(-100%);
                 transition: transform 0.3s ease;
                 box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+                width: 300px !important; /* Override any resize width on mobile */
             }
             
             .sidebar.open {
                 transform: translateX(0);
             }
+            
+            /* Mobile collapse handled by transform instead of width */
             
             .sidebar-overlay.active {
                 display: block;
@@ -519,6 +587,10 @@ class FoamSSG:
             #graph { height: 300px; }
             
             .sidebar-content { padding: 15px; }
+            
+            .sidebar-resizer { display: none; } /* Hide resizer on mobile */
+            
+            .sidebar-header { display: flex; } /* Show header on mobile for collapse button */
         }
     </style>
 </head>
@@ -528,11 +600,20 @@ class FoamSSG:
     
     <div class="container">
         <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Navigation</div>
+                <button class="sidebar-toggle-btn" onclick="toggleSidebarCollapse()" title="Toggle sidebar">
+                    <span id="sidebar-toggle-icon">‹</span>
+                </button>
+            </div>
+            
             <div class="sidebar-tabs">
                 <div class="sidebar-tab active" onclick="showTab('graph')">Graph</div>
                 <div class="sidebar-tab" onclick="showTab('search')">Search</div>
                 <div class="sidebar-tab" onclick="showTab('links')">Links</div>
             </div>
+            
+            <div class="sidebar-resizer" id="sidebar-resizer"></div>
             
             <div class="sidebar-content">
                 <div id="graph-tab" class="tab-content">
@@ -619,8 +700,18 @@ class FoamSSG:
         // Graph visualization
         const graphData = {{ graph_data|safe }};
         const currentNoteId = {% if is_index %}null{% else %}"{{ current_note_id }}"{% endif %};
-        const width = 280;
-        const height = 380;
+        
+        // Get dynamic dimensions
+        function getGraphDimensions() {
+            const graphContainer = document.getElementById('graph');
+            const containerRect = graphContainer.getBoundingClientRect();
+            return {
+                width: containerRect.width - 20, // Account for padding
+                height: 380 // Keep height fixed for now
+            };
+        }
+        
+        let { width, height } = getGraphDimensions();
         
         const svg = d3.select("#graph")
             .append("svg")
@@ -637,10 +728,12 @@ class FoamSSG:
         svg.call(zoom);
         
         const simulation = d3.forceSimulation(graphData.nodes)
-            .force("link", d3.forceLink(graphData.edges).id(d => d.id).distance(30))
-            .force("charge", d3.forceManyBody().strength(-50))
+            .force("link", d3.forceLink(graphData.edges).id(d => d.id).distance(40))
+            .force("charge", d3.forceManyBody().strength(-80))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collision", d3.forceCollide().radius(20));
+            .force("collision", d3.forceCollide().radius(20))
+            .force("x", d3.forceX(width / 2).strength(0.05))
+            .force("y", d3.forceY(height / 2).strength(0.05));
         
         const link = g.append("g")
             .selectAll("line")
@@ -746,6 +839,22 @@ class FoamSSG:
             d.fy = null;
         }
         
+        // Graph resize function
+        function resizeGraph() {
+            const newDimensions = getGraphDimensions();
+            width = newDimensions.width;
+            height = newDimensions.height;
+            
+            // Update SVG dimensions
+            svg.attr("width", width).attr("height", height);
+            
+            // Update simulation center force
+            simulation.force("center", d3.forceCenter(width / 2, height / 2));
+            
+            // Restart simulation with new dimensions
+            simulation.alpha(0.3).restart();
+        }
+        
         // Search functionality
         const searchData = {{ search_data|safe }};
         const searchInput = document.getElementById('search-input');
@@ -795,6 +904,72 @@ class FoamSSG:
                     closeSidebar();
                 }
             });
+        });
+        
+        // Mobile sidebar collapse/expand functionality (hidden on desktop)
+        function toggleSidebarCollapse() {
+            // Only works on mobile - button is hidden on desktop
+            if (window.innerWidth <= 768) {
+                toggleSidebar();
+            }
+        }
+        
+        // Sidebar resizing functionality
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+        
+        const sidebar = document.getElementById('sidebar');
+        const resizer = document.getElementById('sidebar-resizer');
+        
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            startX = e.clientX;
+            startWidth = parseInt(window.getComputedStyle(sidebar).width, 10);
+            
+            // Disable transition during resize for accurate calculations
+            sidebar.classList.add('resizing');
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            
+            // Add a class to prevent text selection during resize
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
+        });
+        
+        function handleMouseMove(e) {
+            if (!isResizing) return;
+            
+            const deltaX = e.clientX - startX;
+            const newWidth = startWidth + deltaX;
+            
+            // Enforce min/max width constraints
+            if (newWidth >= 200 && newWidth <= 600) {
+                sidebar.style.width = newWidth + 'px';
+                // Resize graph immediately since transition is disabled
+                resizeGraph();
+            }
+        }
+        
+        function handleMouseUp() {
+            isResizing = false;
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            
+            // Re-enable transition after resize is complete
+            sidebar.classList.remove('resizing');
+            
+            // Remove the styles added during resize
+            document.body.style.userSelect = '';
+            document.body.style.cursor = '';
+        }
+        
+        // Keyboard shortcuts removed for desktop collapse
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            requestAnimationFrame(resizeGraph);
         });
     </script>
 </body>
