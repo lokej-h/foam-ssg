@@ -1,0 +1,406 @@
+/*
+ * Foam SSG - Minimal C Implementation
+ * A lightweight static site generator for Foam notes
+ * 
+ * Compile: gcc -o foam_ssg foam_ssg.c -lpcre -lcurl -ljson-c
+ * Usage: ./foam_ssg input_dir output_dir
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <pcre.h>
+#include <json-c/json.h>
+
+#define MAX_PATH 4096
+#define MAX_CONTENT 65536
+#define MAX_LINKS 100
+
+typedef struct {
+    char id[256];
+    char title[256];
+    char path[MAX_PATH];
+    char content[MAX_CONTENT];
+    char html[MAX_CONTENT];
+    char* links[MAX_LINKS];
+    int link_count;
+    char* backlinks[MAX_LINKS];
+    int backlink_count;
+} Note;
+
+typedef struct {
+    Note* notes;
+    int note_count;
+    int note_capacity;
+} NoteCollection;
+
+// Function prototypes
+void process_directory(const char* dir_path, NoteCollection* collection);
+void process_markdown_file(const char* file_path, NoteCollection* collection);
+char* convert_markdown_to_html(const char* markdown);
+void extract_wiki_links(const char* content, char** links, int* link_count);
+void generate_html_files(NoteCollection* collection, const char* output_dir);
+void generate_graph_json(NoteCollection* collection, const char* output_dir);
+void create_directory(const char* path);
+char* read_file(const char* path);
+void write_file(const char* path, const char* content);
+
+// HTML template
+const char* HTML_TEMPLATE = "<!DOCTYPE html>\n"
+"<html><head>\n"
+"<meta charset=\"UTF-8\">\n"
+"<title>%s - Foam Notes</title>\n"
+"<style>\n"
+"body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }\n"
+".sidebar { position: fixed; right: 0; top: 0; width: 300px; height: 100vh; background: #f5f5f5; padding: 20px; overflow-y: auto; }\n"
+".content { margin-right: 340px; }\n"
+".wiki-link { color: #0066cc; text-decoration: none; }\n"
+".wiki-link:hover { text-decoration: underline; }\n"
+"</style>\n"
+"</head><body>\n"
+"<div class=\"content\">\n"
+"<h1>%s</h1>\n"
+"%s\n"
+"</div>\n"
+"<div class=\"sidebar\">\n"
+"<h3>Links</h3>\n"
+"<div id=\"outgoing-links\">\n"
+"<h4>Outgoing (%d)</h4><ul>%s</ul>\n"
+"</div>\n"
+"<div id=\"incoming-links\">\n"
+"<h4>Incoming (%d)</h4><ul>%s</ul>\n"
+"</div>\n"
+"</div>\n"
+"</body></html>";
+
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        printf("Usage: %s input_dir output_dir\n", argv[0]);
+        return 1;
+    }
+    
+    const char* input_dir = argv[1];
+    const char* output_dir = argv[2];
+    
+    // Initialize note collection
+    NoteCollection collection = {
+        .notes = malloc(sizeof(Note) * 100),
+        .note_count = 0,
+        .note_capacity = 100
+    };
+    
+    printf("Processing notes from: %s\n", input_dir);
+    
+    // Process all markdown files
+    process_directory(input_dir, &collection);
+    
+    printf("Found %d notes\n", collection.note_count);
+    
+    // Build backlinks
+    for (int i = 0; i < collection.note_count; i++) {
+        Note* note = &collection.notes[i];
+        
+        for (int j = 0; j < note->link_count; j++) {
+            // Find target note and add backlink
+            for (int k = 0; k < collection.note_count; k++) {
+                if (strcmp(collection.notes[k].id, note->links[j]) == 0) {
+                    Note* target = &collection.notes[k];
+                    if (target->backlink_count < MAX_LINKS) {
+                        target->backlinks[target->backlink_count++] = strdup(note->id);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    
+    // Generate output
+    create_directory(output_dir);
+    generate_html_files(&collection, output_dir);
+    generate_graph_json(&collection, output_dir);
+    
+    printf("Site generated in: %s\n", output_dir);
+    
+    // Cleanup
+    for (int i = 0; i < collection.note_count; i++) {
+        for (int j = 0; j < collection.notes[i].link_count; j++) {
+            free(collection.notes[i].links[j]);
+        }
+        for (int j = 0; j < collection.notes[i].backlink_count; j++) {
+            free(collection.notes[i].backlinks[j]);
+        }
+    }
+    free(collection.notes);
+    
+    return 0;
+}
+
+void process_directory(const char* dir_path, NoteCollection* collection) {
+    DIR* dir = opendir(dir_path);
+    if (!dir) return;
+    
+    struct dirent* entry;
+    char path[MAX_PATH];
+    
+    while ((entry = readdir(dir)) != NULL) {
+        if (entry->d_name[0] == '.') continue;
+        
+        snprintf(path, MAX_PATH, "%s/%s", dir_path, entry->d_name);
+        
+        struct stat st;
+        if (stat(path, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                process_directory(path, collection);
+            } else if (strstr(entry->d_name, ".md")) {
+                process_markdown_file(path, collection);
+            }
+        }
+    }
+    
+    closedir(dir);
+}
+
+void process_markdown_file(const char* file_path, NoteCollection* collection) {
+    // Expand collection if needed
+    if (collection->note_count >= collection->note_capacity) {
+        collection->note_capacity *= 2;
+        collection->notes = realloc(collection->notes, 
+            sizeof(Note) * collection->note_capacity);
+    }
+    
+    Note* note = &collection->notes[collection->note_count++];
+    
+    // Extract ID from path
+    char* filename = strrchr(file_path, '/');
+    if (filename) filename++;
+    else filename = (char*)file_path;
+    
+    strncpy(note->id, filename, 255);
+    char* ext = strstr(note->id, ".md");
+    if (ext) *ext = '\0';
+    
+    // Read file content
+    char* content = read_file(file_path);
+    if (!content) return;
+    
+    strncpy(note->content, content, MAX_CONTENT - 1);
+    
+    // Extract title (first H1 or filename)
+    char* title_start = strstr(content, "# ");
+    if (title_start) {
+        title_start += 2;
+        char* title_end = strchr(title_start, '\n');
+        if (title_end) {
+            int len = title_end - title_start;
+            if (len > 255) len = 255;
+            strncpy(note->title, title_start, len);
+            note->title[len] = '\0';
+        }
+    } else {
+        strcpy(note->title, note->id);
+    }
+    
+    // Convert to HTML
+    char* html = convert_markdown_to_html(content);
+    strncpy(note->html, html, MAX_CONTENT - 1);
+    free(html);
+    
+    // Extract wiki links
+    extract_wiki_links(content, note->links, &note->link_count);
+    
+    free(content);
+}
+
+char* convert_markdown_to_html(const char* markdown) {
+    // Simplified markdown conversion
+    // In a real implementation, use a proper markdown parser
+    char* html = malloc(MAX_CONTENT);
+    char* out = html;
+    const char* in = markdown;
+    
+    while (*in) {
+        if (strncmp(in, "# ", 2) == 0) {
+            in += 2;
+            out += sprintf(out, "<h1>");
+            while (*in && *in != '\n') *out++ = *in++;
+            out += sprintf(out, "</h1>");
+        }
+        else if (strncmp(in, "## ", 3) == 0) {
+            in += 3;
+            out += sprintf(out, "<h2>");
+            while (*in && *in != '\n') *out++ = *in++;
+            out += sprintf(out, "</h2>");
+        }
+        else if (strncmp(in, "[[", 2) == 0) {
+            // Wiki link
+            in += 2;
+            char link[256], text[256];
+            char* p = link;
+            
+            while (*in && *in != ']' && *in != '|') *p++ = *in++;
+            *p = '\0';
+            
+            if (*in == '|') {
+                in++;
+                p = text;
+                while (*in && *in != ']') *p++ = *in++;
+                *p = '\0';
+            } else {
+                strcpy(text, link);
+            }
+            
+            if (*in == ']') in++;
+            if (*in == ']') in++;
+            
+            out += sprintf(out, "<a href=\"%s.html\" class=\"wiki-link\">%s</a>", link, text);
+        }
+        else if (*in == '\n' && *(in+1) == '\n') {
+            out += sprintf(out, "</p><p>");
+            in += 2;
+        }
+        else {
+            *out++ = *in++;
+        }
+    }
+    
+    *out = '\0';
+    return html;
+}
+
+void extract_wiki_links(const char* content, char** links, int* link_count) {
+    *link_count = 0;
+    
+    const char* pattern = "\\[\\[([^\\]|]+)(?:\\|[^\\]]+)?\\]\\]";
+    pcre* re;
+    const char* error;
+    int erroffset;
+    
+    re = pcre_compile(pattern, 0, &error, &erroffset, NULL);
+    if (!re) return;
+    
+    int ovector[30];
+    int offset = 0;
+    
+    while (pcre_exec(re, NULL, content, strlen(content), offset, 0, ovector, 30) >= 0) {
+        int len = ovector[3] - ovector[2];
+        char* link = malloc(len + 1);
+        strncpy(link, content + ovector[2], len);
+        link[len] = '\0';
+        
+        // Remove .md extension if present
+        char* ext = strstr(link, ".md");
+        if (ext) *ext = '\0';
+        
+        if (*link_count < MAX_LINKS) {
+            links[(*link_count)++] = link;
+        }
+        
+        offset = ovector[1];
+    }
+    
+    pcre_free(re);
+}
+
+void generate_html_files(NoteCollection* collection, const char* output_dir) {
+    char path[MAX_PATH];
+    char html[MAX_CONTENT * 2];
+    
+    for (int i = 0; i < collection->note_count; i++) {
+        Note* note = &collection->notes[i];
+        
+        // Build link lists
+        char outgoing[4096] = "";
+        char incoming[4096] = "";
+        
+        for (int j = 0; j < note->link_count; j++) {
+            strcat(outgoing, "<li><a href=\"");
+            strcat(outgoing, note->links[j]);
+            strcat(outgoing, ".html\">");
+            strcat(outgoing, note->links[j]);
+            strcat(outgoing, "</a></li>");
+        }
+        
+        for (int j = 0; j < note->backlink_count; j++) {
+            strcat(incoming, "<li><a href=\"");
+            strcat(incoming, note->backlinks[j]);
+            strcat(incoming, ".html\">");
+            strcat(incoming, note->backlinks[j]);
+            strcat(incoming, "</a></li>");
+        }
+        
+        // Generate HTML
+        snprintf(html, sizeof(html), HTML_TEMPLATE,
+            note->title, note->title, note->html,
+            note->link_count, outgoing,
+            note->backlink_count, incoming);
+        
+        // Write file
+        snprintf(path, MAX_PATH, "%s/%s.html", output_dir, note->id);
+        write_file(path, html);
+    }
+}
+
+void generate_graph_json(NoteCollection* collection, const char* output_dir) {
+    json_object* root = json_object_new_object();
+    json_object* nodes = json_object_new_array();
+    json_object* edges = json_object_new_array();
+    
+    // Add nodes
+    for (int i = 0; i < collection->note_count; i++) {
+        Note* note = &collection->notes[i];
+        json_object* node = json_object_new_object();
+        json_object_object_add(node, "id", json_object_new_string(note->id));
+        json_object_object_add(node, "label", json_object_new_string(note->title));
+        json_object_array_add(nodes, node);
+    }
+    
+    // Add edges
+    for (int i = 0; i < collection->note_count; i++) {
+        Note* note = &collection->notes[i];
+        for (int j = 0; j < note->link_count; j++) {
+            json_object* edge = json_object_new_object();
+            json_object_object_add(edge, "source", json_object_new_string(note->id));
+            json_object_object_add(edge, "target", json_object_new_string(note->links[j]));
+            json_object_array_add(edges, edge);
+        }
+    }
+    
+    json_object_object_add(root, "nodes", nodes);
+    json_object_object_add(root, "edges", edges);
+    
+    char path[MAX_PATH];
+    snprintf(path, MAX_PATH, "%s/graph.json", output_dir);
+    write_file(path, json_object_to_json_string(root));
+    
+    json_object_put(root);
+}
+
+void create_directory(const char* path) {
+    mkdir(path, 0755);
+}
+
+char* read_file(const char* path) {
+    FILE* f = fopen(path, "r");
+    if (!f) return NULL;
+    
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    char* content = malloc(size + 1);
+    fread(content, 1, size, f);
+    content[size] = '\0';
+    
+    fclose(f);
+    return content;
+}
+
+void write_file(const char* path, const char* content) {
+    FILE* f = fopen(path, "w");
+    if (!f) return;
+    
+    fprintf(f, "%s", content);
+    fclose(f);
+}
