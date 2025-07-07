@@ -58,6 +58,7 @@ The project is built around the `FoamSSG` class in `foam-ssg.py` with these key 
 - `extract_links()`: Parses `[[wiki-link]]` syntax from markdown content
 - `process_wiki_links()`: Converts wiki links to HTML, marks broken links
 - `process_diagrams()`: Handles Mermaid (client-side) and PlantUML (pre-rendered) diagrams
+- `remove_link_reference_sections()`: Removes `[//begin]` and `[//end]` sections for markdown compatibility
 - `get_full_graph_data()`: Generates complete graph data for D3.js visualization
 
 ### Template Architecture
@@ -90,7 +91,21 @@ foam-ssg/
 
 - `[[Note Title]]` - Basic wiki link
 - `[[Note Title|Display Text]]` - Wiki link with custom display text
+- `[[Note Title#Heading]]` - Link to specific heading within a note
 - Links automatically create bidirectional relationships in the graph
+
+## Link Reference Sections
+
+The system supports markdown compatibility by ignoring `[//begin]` and `[//end]` sections used by other parsers:
+
+```markdown
+[//begin]
+[link in document|renamed link]: <title name with spaces> "title name with spaces"
+[link]: noSpaceName "noSpaceName"
+[//end]
+```
+
+These sections are automatically removed during markdown processing to ensure clean output.
 
 ## Diagram Support
 

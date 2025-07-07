@@ -125,8 +125,17 @@ class FoamSSG:
         
         return list(set(links))  # Remove duplicates
     
+    def remove_link_reference_sections(self, content):
+        """Remove [//begin] and [//end] sections used for other parsers"""
+        # Pattern to match [//begin] ... [//end] sections including content between them
+        pattern = r'\[//begin\].*?\[//end\]'
+        return re.sub(pattern, '', content, flags=re.DOTALL | re.MULTILINE).strip()
+    
     def process_markdown(self, content, note_id):
         """Process markdown with special handling for diagrams and links"""
+        # Remove [//begin] and [//end] sections for markdown compatibility
+        content = self.remove_link_reference_sections(content)
+        
         # Process wiki links
         content = self.process_wiki_links(content, note_id)
         
