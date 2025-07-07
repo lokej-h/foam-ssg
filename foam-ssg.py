@@ -1,0 +1,800 @@
+#!/usr/bin/env python3
+"""
+Foam-style Static Site Generator
+A Python-based static site generator with graph visualization, search, and diagram support.
+"""
+
+import os
+import re
+import json
+import shutil
+import argparse
+import subprocess
+import tempfile
+import hashlib
+from pathlib import Path
+from datetime import datetime
+from collections import defaultdict
+import markdown
+from markdown.extensions import fenced_code
+import frontmatter
+from jinja2 import Environment, FileSystemLoader
+import networkx as nx
+from bs4 import BeautifulSoup
+
+class FoamSSG:
+    def __init__(self, input_dir, output_dir):
+        self.input_dir = Path(input_dir)
+        self.output_dir = Path(output_dir)
+        self.notes = {}
+        self.graph = nx.DiGraph()
+        self.backlinks = defaultdict(list)
+        self.md = markdown.Markdown(extensions=[
+            'fenced_code',
+            'tables',
+            'toc',
+            'meta',
+            'codehilite',
+            'nl2br',
+            'sane_lists'
+        ])
+        
+    def build(self):
+        """Main build process"""
+        print("🚀 Starting Foam SSG build...")
+        
+        # Clean output directory
+        if self.output_dir.exists():
+            shutil.rmtree(self.output_dir)
+        self.output_dir.mkdir(parents=True)
+        
+        # Process all markdown files
+        self.process_notes()
+        
+        # Generate site
+        self.generate_html()
+        self.generate_search_index()
+        self.copy_assets()
+        
+        print("✅ Build complete!")
+        
+    def process_notes(self):
+        """Process all markdown files and build graph"""
+        for md_file in self.input_dir.rglob("*.md"):
+            relative_path = md_file.relative_to(self.input_dir)
+            note_id = str(relative_path.with_suffix(''))
+            
+            # Read frontmatter and content
+            with open(md_file, 'r', encoding='utf-8') as f:
+                post = frontmatter.load(f)
+            
+            # Process content
+            content = post.content
+            html_content = self.process_markdown(content, note_id)
+            
+            # Extract links
+            links = self.extract_links(content)
+            
+            # Store note data
+            self.notes[note_id] = {
+                'id': note_id,
+                'title': post.get('title', md_file.stem),
+                'content': content,
+                'html': html_content,
+                'metadata': post.metadata,
+                'links': links,
+                'backlinks': [],
+                'path': str(relative_path),
+                'url': f"{note_id}.html"
+            }
+            
+            # Add to graph
+            self.graph.add_node(note_id)
+            for link in links:
+                self.graph.add_edge(note_id, link)
+                self.backlinks[link].append(note_id)
+        
+        # Update backlinks
+        for note_id, note in self.notes.items():
+            note['backlinks'] = self.backlinks.get(note_id, [])
+    
+    def extract_links(self, content):
+        """Extract wiki-style links from content"""
+        # Match [[link]] and [[link|alias]] patterns
+        wiki_link_pattern = r'\[\[([^\]]+)\]\]'
+        links = []
+        
+        for match in re.finditer(wiki_link_pattern, content):
+            link = match.group(1).strip()
+            
+            # Handle pipe syntax for aliases
+            if '|' in link:
+                link = link.split('|', 1)[0].strip()
+            
+            # Normalize link (remove .md extension if present)
+            if link.endswith('.md'):
+                link = link[:-3]
+            links.append(link)
+        
+        return list(set(links))  # Remove duplicates
+    
+    def process_markdown(self, content, note_id):
+        """Process markdown with special handling for diagrams and links"""
+        # Process wiki links
+        content = self.process_wiki_links(content, note_id)
+        
+        # Process diagrams
+        content = self.process_diagrams(content, note_id)
+        
+        # Convert to HTML
+        html = self.md.convert(content)
+        
+        return html
+    
+    def process_wiki_links(self, content, current_note_id):
+        """Convert wiki links to HTML links"""
+        def replace_link(match):
+            full_match = match.group(0)
+            link = match.group(1).strip()
+            alias = None
+            
+            # Handle pipe syntax for aliases
+            if '|' in link:
+                parts = link.split('|', 1)
+                link = parts[0].strip()
+                alias = parts[1].strip()
+            
+            if not alias:
+                alias = link
+            
+            # Normalize link
+            if link.endswith('.md'):
+                link = link[:-3]
+            
+            # Check if target exists
+            if link in self.notes:
+                # Calculate relative path from current note to target
+                relative_path = self.get_relative_path(current_note_id, link)
+                return f'<a href="{relative_path}" class="wiki-link">{alias}</a>'
+            else:
+                return f'<span class="wiki-link broken" title="Note not found: {link}">{alias}</span>'
+        
+        # Match [[link]] and [[link|alias]] patterns
+        wiki_link_pattern = r'\[\[([^\]]+)\]\]'
+        return re.sub(wiki_link_pattern, replace_link, content)
+    
+    def get_relative_path(self, from_note_id, to_note_id):
+        """Calculate relative path from one note to another"""
+        # Split paths into components
+        from_parts = from_note_id.split('/')
+        to_parts = to_note_id.split('/')
+        
+        # Count directory levels to go up from source
+        from_depth = len(from_parts) - 1  # Subtract 1 for the filename
+        
+        # Build relative path
+        if from_depth == 0:
+            # Source is in root, target path as-is
+            return f"{to_note_id}.html"
+        else:
+            # Need to go up directories
+            up_dirs = "../" * from_depth
+            return f"{up_dirs}{to_note_id}.html"
+    
+    def process_diagrams(self, content, note_id):
+        """Process Mermaid and PlantUML diagrams"""
+        # Process Mermaid
+        mermaid_pattern = r'```mermaid\n(.*?)\n```'
+        content = re.sub(mermaid_pattern, self.render_mermaid, content, flags=re.DOTALL)
+        
+        # Process PlantUML
+        plantuml_pattern = r'```plantuml\n(.*?)\n```'
+        content = re.sub(plantuml_pattern, lambda m: self.render_plantuml(m, note_id), content, flags=re.DOTALL)
+        
+        return content
+    
+    def render_mermaid(self, match):
+        """Render Mermaid diagrams (client-side)"""
+        diagram_code = match.group(1)
+        return f'<div class="mermaid">\n{diagram_code}\n</div>'
+    
+    def render_plantuml(self, match, note_id):
+        """Render PlantUML diagrams (pre-rendered at build time)"""
+        diagram_code = match.group(1)
+        
+        # Create diagrams directory
+        diagrams_dir = self.output_dir / 'diagrams'
+        diagrams_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        diagram_hash = hashlib.md5(diagram_code.encode()).hexdigest()
+        img_filename = f'plantuml_{note_id}_{diagram_hash}.png'
+        img_path = diagrams_dir / img_filename
+        
+        # Try to render with PlantUML if available
+        try:
+            # Write PlantUML code to temp file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.puml', delete=False) as temp_file:
+                temp_file.write(f'@startuml\n{diagram_code}\n@enduml')
+                temp_filename = temp_file.name
+            
+            # Run PlantUML (try different common commands)
+            for cmd in ['plantuml', 'java -jar plantuml.jar']:
+                try:
+                    result = subprocess.run(
+                        f'{cmd} -tpng -o "{str(diagrams_dir)}" "{temp_filename}"',
+                        shell=True,
+                        capture_output=True,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        break
+                except:
+                    continue
+            
+            # Clean up temp file
+            Path(temp_filename).unlink(missing_ok=True)
+            
+            # Check if image was generated
+            generated_img = diagrams_dir / f'{Path(temp_filename).stem}.png'
+            if generated_img.exists():
+                # Rename to our desired filename
+                generated_img.rename(img_path)
+                return f'<img src="diagrams/{img_filename}" alt="PlantUML diagram" class="plantuml-diagram">'
+            
+        except Exception as e:
+            print(f"Warning: Could not render PlantUML diagram: {e}")
+        
+        # Fallback: render as code block with note to install PlantUML
+        return f'''<div class="plantuml-fallback">
+<p><em>PlantUML diagram (install PlantUML to see rendered image):</em></p>
+<pre><code class="language-plantuml">{diagram_code}</code></pre>
+</div>'''
+    
+    def generate_html(self):
+        """Generate HTML files for all notes"""
+        # Create template
+        template = self.create_template()
+        
+        # Get full graph data (same for all pages)
+        full_graph_data = self.get_full_graph_data()
+        
+        # Generate individual note pages
+        for note_id, note in self.notes.items():
+            output_path = self.output_dir / f"{note_id}.html"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Render template with full graph but current note highlighted
+            html = template.render(
+                note=note,
+                all_notes=self.notes,
+                graph_data=json.dumps(full_graph_data),
+                current_note_id=note_id,
+                search_data=json.dumps(self.get_search_data()),
+                is_index=False
+            )
+            
+            output_path.write_text(html)
+        
+        # Generate index page
+        self.generate_index_page(template)
+    
+    def get_full_graph_data(self):
+        """Get complete graph data with all nodes"""
+        nodes = []
+        edges = []
+        
+        # Add all nodes
+        for note_id, note in self.notes.items():
+            nodes.append({
+                'id': note_id,
+                'label': note['title'],
+                'url': note['url']
+            })
+        
+        # Add all edges
+        edge_set = set()  # To avoid duplicates
+        for note_id, note in self.notes.items():
+            for link in note['links']:
+                if link in self.notes:
+                    edge_key = (note_id, link)
+                    if edge_key not in edge_set:
+                        edge_set.add(edge_key)
+                        edges.append({'source': note_id, 'target': link})
+        
+        return {'nodes': nodes, 'edges': edges}
+    
+    def get_search_data(self):
+        """Prepare search index data"""
+        search_data = []
+        for note_id, note in self.notes.items():
+            search_data.append({
+                'id': note_id,
+                'title': note['title'],
+                'content': note['content'][:500],  # First 500 chars for preview
+                'url': note['url']
+            })
+        return search_data
+    
+    def generate_search_index(self):
+        """Generate search index file"""
+        search_index = {
+            'notes': self.get_search_data()
+        }
+        
+        index_path = self.output_dir / 'search-index.json'
+        index_path.write_text(json.dumps(search_index))
+    
+    def generate_index_page(self, template):
+        """Generate main index page"""
+        # Get full graph data
+        graph_data = self.get_full_graph_data()
+        
+        html = template.render(
+            is_index=True,
+            notes=self.notes,
+            graph_data=json.dumps(graph_data),
+            current_note_id=None,
+            search_data=json.dumps(self.get_search_data())
+        )
+        
+        (self.output_dir / 'index.html').write_text(html)
+    
+    def create_template(self):
+        """Create HTML template"""
+        template_str = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if is_index %}Foam Notes{% else %}{{ note.title }} - Foam Notes{% endif %}</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e1e; color: #d4d4d4; }
+        
+        .container { display: flex; height: 100vh; }
+        
+        /* Sidebar */
+        .sidebar { width: 300px; background: #252526; border-right: 1px solid #3e3e42; display: flex; flex-direction: column; }
+        .sidebar-tabs { display: flex; background: #2d2d30; }
+        .sidebar-tab { flex: 1; padding: 10px; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
+        .sidebar-tab.active { border-bottom-color: #007acc; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 20px; }
+        
+        /* Graph */
+        #graph { width: 100%; height: 400px; background: #1e1e1e; position: relative; border-radius: 4px; }
+        .graph-node { cursor: pointer; }
+        .graph-node:hover { stroke-width: 3px !important; }
+        .graph-link { stroke: #666; stroke-opacity: 0.6; }
+        .graph-controls { display: flex; gap: 5px; }
+        .graph-controls button { 
+            background: #3c3c3c; 
+            border: 1px solid #555; 
+            color: #d4d4d4; 
+            padding: 5px 10px; 
+            cursor: pointer; 
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .graph-controls button:hover { background: #484848; }
+        
+        /* Search */
+        .search-box { width: 100%; padding: 10px; background: #3c3c3c; border: 1px solid #3e3e42; color: #d4d4d4; margin-bottom: 20px; }
+        .search-results { list-style: none; }
+        .search-result { padding: 10px; cursor: pointer; border-bottom: 1px solid #3e3e42; }
+        .search-result:hover { background: #2a2d2e; }
+        
+        /* Links */
+        .links-section { margin-bottom: 30px; }
+        .links-section h3 { margin-bottom: 10px; color: #cccccc; }
+        .link-list { list-style: none; }
+        .link-item { padding: 8px 0; }
+        .link-item a { color: #3794ff; text-decoration: none; }
+        .link-item a:hover { text-decoration: underline; }
+        
+        /* Main content */
+        .main-content { flex: 1; overflow-y: auto; padding: 40px; }
+        .note-content { max-width: 800px; margin: 0 auto; }
+        .note-content h1 { margin-bottom: 30px; }
+        .note-content h2 { margin: 30px 0 15px; }
+        .note-content p { margin-bottom: 15px; line-height: 1.6; }
+        .note-content code { background: #3c3c3c; padding: 2px 4px; border-radius: 3px; }
+        .note-content pre { background: #1e1e1e; border: 1px solid #3e3e42; padding: 15px; margin: 15px 0; overflow-x: auto; }
+        
+        /* Wiki links */
+        .wiki-link { color: #3794ff; text-decoration: none; }
+        .wiki-link:hover { text-decoration: underline; }
+        .wiki-link.broken { color: #f48771; text-decoration: line-through; }
+        
+        /* Diagrams */
+        .mermaid { margin: 20px 0; text-align: center; }
+        .plantuml-diagram { max-width: 100%; margin: 20px 0; }
+        
+        /* Mobile Toggle Button */
+        .sidebar-toggle { 
+            display: none; 
+            position: fixed; 
+            top: 20px; 
+            left: 20px; 
+            z-index: 1000; 
+            background: #007acc; 
+            color: white; 
+            border: none; 
+            padding: 10px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 16px;
+        }
+        
+        /* Overlay for mobile */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 998;
+        }
+        
+        /* Mobile Styles */
+        @media (max-width: 768px) {
+            .sidebar-toggle { display: block; }
+            
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                z-index: 999;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .sidebar-overlay.active {
+                display: block;
+            }
+            
+            .main-content {
+                width: 100%;
+                padding: 80px 20px 20px 20px;
+            }
+            
+            .note-content h1 { font-size: 2em; }
+            .note-content h2 { font-size: 1.5em; }
+            .note-content h3 { font-size: 1.2em; }
+            
+            #graph { height: 300px; }
+            
+            .sidebar-content { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="sidebar-overlay" onclick="closeSidebar()"></div>
+    
+    <div class="container">
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-tabs">
+                <div class="sidebar-tab active" onclick="showTab('graph')">Graph</div>
+                <div class="sidebar-tab" onclick="showTab('search')">Search</div>
+                <div class="sidebar-tab" onclick="showTab('links')">Links</div>
+            </div>
+            
+            <div class="sidebar-content">
+                <div id="graph-tab" class="tab-content">
+                    <div id="graph"></div>
+                    <div id="graph-info"></div>
+                </div>
+                
+                <div id="search-tab" class="tab-content" style="display: none;">
+                    <input type="text" class="search-box" placeholder="Search notes..." id="search-input">
+                    <ul class="search-results" id="search-results"></ul>
+                </div>
+                
+                <div id="links-tab" class="tab-content" style="display: none;">
+                    {% if not is_index %}
+                    <div class="links-section">
+                        <h3>Outgoing Links ({{ note.links|length }})</h3>
+                        <ul class="link-list">
+                            {% for link in note.links %}
+                                {% if link in all_notes %}
+                                <li class="link-item">
+                                    <a href="{{ all_notes[link].url }}">{{ all_notes[link].title }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    
+                    <div class="links-section">
+                        <h3>Incoming Links ({{ note.backlinks|length }})</h3>
+                        <ul class="link-list">
+                            {% for backlink in note.backlinks %}
+                                {% if backlink in all_notes %}
+                                <li class="link-item">
+                                    <a href="{{ all_notes[backlink].url }}">{{ all_notes[backlink].title }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            {% if is_index %}
+                <div class="note-content">
+                    <h1>Foam Notes</h1>
+                    <p>Welcome to your Foam knowledge base. Select a note from the graph or search to get started.</p>
+                    
+                    <h2>All Notes</h2>
+                    <ul>
+                        {% for note_id, note in notes.items() %}
+                        <li><a href="{{ note.url }}">{{ note.title }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% else %}
+                <div class="note-content">
+                    <h1>{{ note.title }}</h1>
+                    {{ note.html|safe }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ theme: 'dark', startOnLoad: true });
+        
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.style.display = 'none';
+            });
+            document.querySelectorAll('.sidebar-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.getElementById(tabName + '-tab').style.display = 'block';
+            event.target.classList.add('active');
+        }
+        
+        // Graph visualization
+        const graphData = {{ graph_data|safe }};
+        const currentNoteId = {% if is_index %}null{% else %}"{{ current_note_id }}"{% endif %};
+        const width = 280;
+        const height = 380;
+        
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
+        
+        // Add zoom behavior
+        const g = svg.append("g");
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
+        svg.call(zoom);
+        
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force("link", d3.forceLink(graphData.edges).id(d => d.id).distance(30))
+            .force("charge", d3.forceManyBody().strength(-50))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(20));
+        
+        const link = g.append("g")
+            .selectAll("line")
+            .data(graphData.edges)
+            .enter().append("line")
+            .attr("class", "graph-link")
+            .attr("stroke-width", 1);
+        
+        const node = g.append("g")
+            .selectAll("circle")
+            .data(graphData.nodes)
+            .enter().append("circle")
+            .attr("r", d => d.id === currentNoteId ? 8 : 5)
+            .attr("fill", d => {
+                if (d.id === currentNoteId) return "#007acc";
+                // Color connected nodes differently
+                const isConnected = graphData.edges.some(e => 
+                    (e.source.id || e.source) === currentNoteId && (e.target.id || e.target) === d.id ||
+                    (e.target.id || e.target) === currentNoteId && (e.source.id || e.source) === d.id
+                );
+                return isConnected ? "#4CAF50" : "#cccccc";
+            })
+            .attr("class", "graph-node")
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 1.5)
+            .on("click", (event, d) => {
+                window.location.href = d.url;
+            })
+            .on("mouseover", function(event, d) {
+                // Show tooltip
+                const tooltip = d3.select("body").append("div")
+                    .attr("class", "graph-tooltip")
+                    .style("position", "absolute")
+                    .style("background", "#333")
+                    .style("color", "#fff")
+                    .style("padding", "5px 10px")
+                    .style("border-radius", "3px")
+                    .style("font-size", "12px")
+                    .style("pointer-events", "none")
+                    .text(d.label);
+                
+                tooltip.style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 10) + "px");
+            })
+            .on("mouseout", function() {
+                d3.selectAll(".graph-tooltip").remove();
+            })
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+        
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            
+            node
+                .attr("cx", d => Math.max(5, Math.min(width - 5, d.x)))
+                .attr("cy", d => Math.max(5, Math.min(height - 5, d.y)));
+        });
+        
+        // Zoom controls
+        d3.select("#graph").append("div")
+            .attr("class", "graph-controls")
+            .style("position", "absolute")
+            .style("bottom", "10px")
+            .style("right", "10px")
+            .html(`
+                <button onclick="zoomIn()">+</button>
+                <button onclick="zoomOut()">-</button>
+                <button onclick="resetZoom()">Reset</button>
+            `);
+        
+        function zoomIn() {
+            svg.transition().call(zoom.scaleBy, 1.3);
+        }
+        
+        function zoomOut() {
+            svg.transition().call(zoom.scaleBy, 0.7);
+        }
+        
+        function resetZoom() {
+            svg.transition().call(zoom.transform, d3.zoomIdentity);
+        }
+        
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        // Search functionality
+        const searchData = {{ search_data|safe }};
+        const searchInput = document.getElementById('search-input');
+        const searchResults = document.getElementById('search-results');
+        
+        searchInput?.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            if (query.length < 2) {
+                searchResults.innerHTML = '';
+                return;
+            }
+            
+            const results = searchData.filter(note => 
+                note.title.toLowerCase().includes(query) || 
+                note.content.toLowerCase().includes(query)
+            );
+            
+            searchResults.innerHTML = results.slice(0, 10).map(note => `
+                <li class="search-result" onclick="window.location.href='${note.url}'">
+                    <strong>${note.title}</strong><br>
+                    <small>${note.content.substring(0, 100)}...</small>
+                </li>
+            `).join('');
+        });
+        
+        // Mobile sidebar toggle functionality
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+        
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+        }
+        
+        // Close sidebar when clicking on a link (mobile)
+        document.querySelectorAll('.sidebar a').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth <= 768) {
+                    closeSidebar();
+                }
+            });
+        });
+    </script>
+</body>
+</html>'''
+        
+        env = Environment(loader=FileSystemLoader('.'))
+        return env.from_string(template_str)
+    
+    def copy_assets(self):
+        """Copy any additional assets"""
+        # This is where you'd copy CSS, JS, images, etc.
+        pass
+
+def main():
+    parser = argparse.ArgumentParser(description='Foam-style Static Site Generator')
+    parser.add_argument('input', help='Input directory containing markdown files')
+    parser.add_argument('-o', '--output', default='_site', help='Output directory (default: _site)')
+    parser.add_argument('--serve', action='store_true', help='Start local server after build')
+    
+    args = parser.parse_args()
+    
+    # Build site
+    ssg = FoamSSG(args.input, args.output)
+    ssg.build()
+    
+    # Serve if requested
+    if args.serve:
+        import http.server
+        import socketserver
+        
+        os.chdir(args.output)
+        PORT = 8000
+        Handler = http.server.SimpleHTTPRequestHandler
+        
+        with socketserver.TCPServer(("", PORT), Handler) as httpd:
+            print(f"🌐 Serving at http://localhost:{PORT}")
+            httpd.serve_forever()
+
+if __name__ == '__main__':
+    main()
+
+# Requirements:
+# pip install markdown frontmatter jinja2 networkx beautifulsoup4
+
+# Usage:
+# python foam_ssg.py /path/to/notes -o /path/to/output
+# python foam_ssg.py /path/to/notes --serve  # Build and serve locally
