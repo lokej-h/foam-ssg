@@ -34,9 +34,7 @@ class FoamSSG:
             'tables',
             'toc',
             'meta',
-            'codehilite',
-            'nl2br',
-            'sane_lists'
+            'codehilite'
         ])
         
     def build(self):
@@ -779,6 +777,11 @@ skinparam stereotypeEBackgroundColor #2d2d30
         .note-content p { margin-bottom: 15px; line-height: 1.6; }
         .note-content code { background: #3c3c3c; padding: 2px 4px; border-radius: 3px; }
         .note-content pre { background: #1e1e1e; border: 1px solid #3e3e42; padding: 15px; margin: 15px 0; overflow-x: auto; }
+        
+        /* List styling for proper indentation */
+        .note-content ul, .note-content ol { margin: 10px 0; padding-left: 20px; }
+        .note-content ul ul, .note-content ol ol, .note-content ul ol, .note-content ol ul { margin: 5px 0; }
+        .note-content li { margin: 5px 0; line-height: 1.6; }
         
         /* Wiki links */
         .wiki-link { color: #3794ff; text-decoration: none; }

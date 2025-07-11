@@ -180,6 +180,151 @@ graph LR
 Related: [[concepts/zettelkasten]], [[concepts/personal-knowledge-management]]
 ```
 
+## notes/concepts/list-formatting.md
+```markdown
+---
+title: List Formatting Examples
+tags: [concepts, formatting, markdown]
+---
+
+# List Formatting Examples
+
+This note demonstrates various list formatting scenarios to test proper indentation rendering.
+
+## Basic Lists
+
+### Numbered Lists
+1. First item
+2. Second item
+3. Third item
+
+### Bullet Lists
+- First bullet
+- Second bullet
+- Third bullet
+
+## Nested Lists
+
+### Numbered with Bullet Nesting
+1. First main item
+2. Second main item
+   - Nested bullet one
+   - Nested bullet two
+     - Deep nested bullet
+     - Another deep bullet
+   - Back to second level
+3. Third main item
+   - Another nested bullet
+   - Final nested bullet
+
+### Bullet with Numbered Nesting
+- First main bullet
+- Second main bullet
+  1. Nested number one
+  2. Nested number two
+     - Mixed deep bullet
+     - Another mixed deep bullet
+  3. Nested number three
+- Third main bullet
+  1. Another nested number
+  2. Final nested number
+
+## Complex Mixed Lists
+
+### Project Planning Example
+1. Research Phase
+   - Literature review
+   - Competitor analysis
+     1. Feature comparison
+     2. Pricing analysis
+        - Basic tier pricing
+        - Premium tier pricing
+     3. Market positioning
+   - User interviews
+     - Interview questions
+     - Participant recruitment
+2. Design Phase
+   - Wireframes
+   - Mockups
+     - Desktop mockups
+     - Mobile mockups
+   - User testing
+3. Development Phase
+   - Backend development
+     1. Database design
+     2. API development
+        - Authentication endpoints
+        - Data endpoints
+        - File upload endpoints
+     3. Testing
+   - Frontend development
+     - Component development
+     - Integration testing
+
+### Learning Topics
+- Programming Languages
+  1. Python
+     - Basic syntax
+     - Web frameworks
+       - Django
+       - Flask
+       - FastAPI
+     - Data science libraries
+  2. JavaScript
+     - ES6 features
+     - Frameworks
+       - React
+       - Vue
+       - Svelte
+     - Node.js
+  3. TypeScript
+     - Type definitions
+     - Advanced types
+- Tools and Technologies
+  - Version Control
+    1. Git basics
+    2. Advanced Git
+       - Branching strategies
+       - Merge vs rebase
+    3. GitHub/GitLab
+  - Development Environment
+    - Code editors
+    - Terminal tools
+    - Package managers
+
+## Edge Cases
+
+### Very Deep Nesting
+1. Level 1
+   - Level 2
+     1. Level 3
+        - Level 4
+          1. Level 5
+             - Level 6
+               - This is very deep!
+          2. Back to level 5
+        - Back to level 4
+     2. Back to level 3
+   - Back to level 2
+2. Back to level 1
+
+### Mixed Content Types
+1. Introduction
+   - Overview paragraph explaining the concept
+   - Key benefits:
+     1. Improved organization
+     2. Better readability
+        - Easier to scan
+        - Clearer hierarchy
+     3. Enhanced maintenance
+2. Implementation
+   - Step-by-step guide
+   - Code examples (see [[programming/python-tips]])
+   - Testing procedures
+
+This note tests comprehensive list formatting and should render with proper indentation at all levels.
+```
+
 ## Directory Structure
 
 ```
@@ -200,6 +345,7 @@ notes/
 ├── concepts/
 │   ├── markdown.md
 │   ├── wiki-links.md
+│   ├── list-formatting.md
 │   ├── zettelkasten.md
 │   └── personal-knowledge-management.md
 └── tools/
